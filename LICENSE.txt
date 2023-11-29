@@ -1,5 +1,5 @@
 LOST PROGRAMMING LANGUAGE DEVELOPER LICENSE
-Version 2.0, [Date]
+Version 1.0, [2023-11-29]
 
 [Micheal chiemerie ken/hislost]
 
