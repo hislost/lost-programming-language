@@ -1,0 +1,187 @@
+import tkinter as tk
+from tkinter import scrolledtext, messagebox, filedialog, ttk
+from io import StringIO
+import sys
+
+class LostInterpreter:
+    def __init__(self):
+        self.variables = {}
+        self.output = []
+
+    def set_variable(self, name, value):
+        self.variables[name] = value
+
+    def calculate(self, expression):
+        try:
+            return eval(expression, {}, self.variables)
+        except Exception as e:
+            return str(e)
+
+    def execute_line(self, line):
+        try:
+            if "variable" in line and "is set to" in line:
+                parts = line.split(" is set to ")
+                var_name = parts[0].split()[-1]
+                value = parts[1].strip('"')
+                if value.isdigit():
+                    value = int(value)
+                self.set_variable(var_name, value)
+            elif "write:" in line:
+                expression = line.replace("write:", "").strip()
+                for operator, py_operator in [("plus", "+"), ("minus", "-"), ("divide", "/"), ("multiply", "*"), ("rest", "%")]:
+                    expression = expression.replace(operator, py_operator)
+                result = self.calculate(expression)
+                self.output.append(str(result))
+            elif "if" in line and "then" in line:
+                condition, statement = line.split("then")
+                condition = condition.replace("if", "").strip()
+                for key, value in [("exactly", "=="), ("is in", "in"), ("and", "and"), ("or", "or"), ("not", "not")]:
+                    condition = condition.replace(key, value)
+                if eval(condition, {}, self.variables):
+                    self.execute_line(statement)
+        except Exception as e:
+            self.output.append(f"Error: {str(e)}")
+
+    def run_all(self, code):
+        lines = code.split('\n')
+        for line in lines:
+            if line.startswith('/:') or 'run(Line)' in line:
+                continue
+            self.execute_line(line)
+        return '\n'.join(self.output)
+
+class LostIDE(tk.Tk):
+    def __init__(self):
+        super().__init__()
+
+        self.title("Lost IDE")
+        self.geometry("800x600")
+
+        # Create a dark theme
+        self.configure(bg='#2E2E2E')
+
+        # Create tabs
+        self.tab_control = ttk.Notebook(self)
+        self.tab_control.pack(expand=1, fill="both")
+
+        # Create a tab for the editor
+        editor_tab = tk.Frame(self.tab_control)
+        self.tab_control.add(editor_tab, text="Editor")
+        
+        self.text_widget = scrolledtext.ScrolledText(editor_tab, wrap=tk.WORD, width=80, height=20, bg='#2E2E2E', fg='white', insertbackground='white')
+        self.text_widget.pack(padx=10, pady=10, fill="both", expand=True)
+
+        # Create a tab for the output
+        output_tab = tk.Frame(self.tab_control)
+        self.tab_control.add(output_tab, text="Output")
+        
+        #create another tab for planning
+        planning_tab = tk.Frame(self.tab_control)
+        self.tab_control.add(planning_tab, text="Notes")
+        self.planning_tab = scrolledtext.ScrolledText(planning_tab, wrap=tk.WORD, width=80, height=20, bg='#ffffff', fg='black', insertbackground='black')
+        self.planning_tab.pack(padx=10, pady=10, fill="both", expand=True)
+        
+
+        self.output_text = scrolledtext.ScrolledText(output_tab, wrap=tk.WORD, width=80, height=10, bg='#2E2E2E', fg='white', insertbackground='white', state=tk.DISABLED)
+        self.output_text.pack(padx=10, pady=10, fill="both", expand=True)
+
+        # Buttons
+        run_button = tk.Button(editor_tab, text="Run", command=self.run_code, bg='#4CAF50', fg='white')
+        run_button.pack(side=tk.LEFT, padx=5)
+        
+        save_button = tk.Button(editor_tab, text="Save", command=self.save_code, bg='#2196F3', fg='white')
+        save_button.pack(side=tk.LEFT, padx=5)
+
+        load_button = tk.Button(editor_tab, text="Load", command=self.load_code, bg='#2196F3', fg='white')
+        load_button.pack(side=tk.LEFT, padx=5)
+
+        exit_button = tk.Button(editor_tab, text="Exit", command=self.exit_app, bg='#F44336', fg='white')
+        exit_button.pack(side=tk.RIGHT, padx=5)
+
+        # Configure the text widget for syntax highlighting
+        self.text_widget.tag_configure("cyan", foreground="cyan")
+        self.text_widget.tag_configure("yellow", foreground="yellow")
+        self.text_widget.tag_configure("orange", foreground="orange")
+        self.text_widget.tag_configure("purple", foreground="purple")
+
+        # Bind the syntax highlighting function to the text widget
+        self.text_widget.bind("<KeyRelease>", self.highlight_syntax)
+
+    def highlight_syntax(self, event):
+        code = self.text_widget.get("1.0", tk.END)
+        keywords_mapping = {
+            "write:": "cyan",
+            "variable": "orange",
+            "is set to": "yellow",
+            "if": "orange",
+            "then": "orange",
+            "exactly": "orange",
+            "is in": "orange",
+            "and": "orange",
+            "not": "orange",
+            "\:": "grey",
+            '\"': "green",
+        }
+
+        # Remove previous tags
+        for tag in self.text_widget.tag_names():
+            self.text_widget.tag_remove(tag, "1.0", tk.END)
+
+        for keyword, color in keywords_mapping.items():
+            start_index = "1.0"
+            while True:
+                start_index = self.text_widget.search(keyword, start_index, stopindex=tk.END, regexp=True)
+                if not start_index:
+                    break
+
+                end_index = self.text_widget.index(f"{start_index}+{len(keyword)}c")
+                self.text_widget.tag_add(color, start_index, end_index)
+
+                start_index = end_index
+
+    def run_code(self):
+        code = self.text_widget.get("1.0", tk.END)
+        interpreter = LostInterpreter()
+
+        try:
+            # Redirect stdout to capture output
+            original_stdout = sys.stdout
+            sys.stdout = StringIO()
+
+            # Run the code using the LostInterpreter
+            output = interpreter.run_all(code)
+
+            # Display output
+            self.output_text.config(state=tk.NORMAL)
+            self.output_text.delete("1.0", tk.END)
+            self.output_text.insert(tk.END, output)
+            self.output_text.config(state=tk.DISABLED)
+        except Exception as e:
+            error_message = f"An error occurred: {str(e)}"
+            messagebox.showerror("Error", error_message)
+        finally:
+            # Reset stdout
+            sys.stdout = original_stdout
+
+    def save_code(self):
+        code_to_save = self.text_widget.get("1.0", tk.END)
+        file_path = filedialog.asksaveasfilename(defaultextension=".lost", filetypes=[("Lost Files", "*.lost")])
+        
+        if file_path:
+            with open(file_path, "w") as file:
+                file.write(code_to_save)
+    def load_code(self):
+        file_path = filedialog.askopenfilename(defaultextension=".lost", filetypes=[("Lost Files", "*.lost")])
+
+        if file_path:
+            with open(file_path, "r") as file:
+                code_from_file = file.read()
+                self.text_widget.delete("1.0", tk.END)
+                self.text_widget.insert(tk.END, code_from_file)
+
+    def exit_app(self):
+        self.destroy()
+
+if __name__ == "__main__":
+    app = LostIDE()
+    app.mainloop()
