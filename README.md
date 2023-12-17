@@ -5,8 +5,9 @@ Just so you're in the loop, I'm doing this for the sheer thrill of it. If it sta
 
 Officially kicked off this language venture just a couple of days ago. Progress report: I've got a variable and the print function down. Sounds basic, I know, but Rome wasn't built in a day. Here's a snippet to give you a taste of the code vibes:
 
+``
 variable number is set to 20 
-write: number plus number 
+write: number plus number``
 
 
 output: 
